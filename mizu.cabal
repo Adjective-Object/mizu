@@ -22,4 +22,8 @@ executable mizu
   extensions:
   build-depends:
     canonical-filepath,
+    split,
+    aeson == 0.6.1.0,
+    containers >= 0.5.0.0,
+    bytestring >= 0.10.0.2,
     base >= 4.6
