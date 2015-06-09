@@ -3,7 +3,7 @@
 
 name:                mizu
 version:             0.1.0.0
-synopsis:            create templates based on hex code colour matches
+synopsis:            create templates from files by matching them to colours
 -- description:         
 -- license:             
 license-file:        LICENSE
@@ -15,6 +15,11 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 executable mizu
-  -- main-is:             
-  -- other-modules:       
-  build-depends:       base ==4.6.*
+  main-is:       mizu.hs
+  hs-source-dirs: src
+  ghc-options:
+    -O2
+  extensions:
+  build-depends:
+    canonical-filepath,
+    base >= 4.6
