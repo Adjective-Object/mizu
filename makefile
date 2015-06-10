@@ -10,7 +10,8 @@ mizu: src/*
 	cabal configure
 	cabal build
 	cp $(BUILD_PATH)/mizu/mizu ./mizu
-	echo "Build Complete!" && echo ""
+
+	@echo "Build Complete!" && echo ""
 
 lint:
 	hlint src/

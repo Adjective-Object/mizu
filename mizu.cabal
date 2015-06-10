@@ -20,6 +20,9 @@ executable mizu
   ghc-options:
     -O2
   extensions:
+    DataKinds,
+    DeriveDataTypeable,
+    MultiParamTypeClasses
   build-depends:
     canonical-filepath,
     split,

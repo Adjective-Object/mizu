@@ -21,7 +21,7 @@ import Data.Aeson (decode)
 import Data.ByteString.Char8(pack)
 import Data.ByteString.Lazy as BSL (fromChunks, readFile)
 
-import Colours (matchColoursOnFiles)
+import ColourScan (matchColoursOnFiles)
 
 -- cast a value to string 
 traceVal x = trace (show x) x
@@ -38,11 +38,17 @@ exitWithError err = do
 
 data MaybeFlag = Error String | Flag FLAG
 
+instance Show (IO a) where
+    show _ = "<ioref>"
+
+instance Eq (IO a) where
+    (==) _ _ = False
+
 -- options
 data FLAG = HELP
     | DESTINATION_FIXED
     | OUTPUT_DIRECTORY String
-    | COLOUR_MAPPING (Either String (Map String String))
+    | COLOUR_MAPPING  (IO(Map String String))
     deriving (Show, Eq)
 
 (+\) a b = a ++ "\n" ++ b
@@ -113,10 +119,7 @@ colourMapOpt =
              ", \"blue\":  \"#0000FF\" }"+\
          "If it is not a valid JSON string, it will be treated as a"+\
          "file path, and  the apprpriate file will be parsed as json")
-    where mapping str = Flag (COLOUR_MAPPING 
-                                (case decode $ fromChunks $ pack [str] of
-                                    Just a -> Right a
-                                    Nothing -> Left str))
+    where mapping str = Flag (COLOUR_MAPPING $ loadColour str)
 
 defaultColourMap = fromList 
     [ ("black", "#000000")
@@ -162,28 +165,15 @@ printHelpText = do
     putStrLn $ helpText progName
     exitSuccess
 
-getColourmapFromOpts :: [FLAG] -> IO(Map String String)
-getColourmapFromOpts flags = 
-    if not $ null colourflags
-        then extractMappingWithFallback (head colourflags)
-        else return defaultColourMap
 
-    where 
-        colourflags     = filter isColourMap flags
-        isColourMap arg = case arg of
-            COLOUR_MAPPING _ -> True
-            _                -> False
-
-        extractMappingWithFallback :: FLAG -> IO(Map String String)
-        extractMappingWithFallback (COLOUR_MAPPING arg) = 
-            case arg of 
-                -- map passed unsuccessfully from stdin
-                Left path -> parseFileToColourMap path
-                -- map passed successfully from stdin
-                Right map -> return map 
-
-        parseFileToColourMap :: String -> IO(Map String String)
-        parseFileToColourMap path = do
+loadColour :: String -> IO(Map String String)
+loadColour str = 
+    case decode $ fromChunks [pack str] of
+        Just map -> return map
+        Nothing -> loadMapFromFile str
+    where   
+        loadMapFromFile :: FilePath -> IO(Map String String)
+        loadMapFromFile path = do
             putStrLn "colour map not valid json, loading as file..."
             bs <- BSL.readFile path
             
@@ -196,6 +186,19 @@ getColourmapFromOpts flags =
                         "failed to parse json in " ++ path 
                         ++ ", falling back to default" 
                     return defaultColourMap
+
+getColourmapFromOpts :: [FLAG] -> IO(Map String String)
+getColourmapFromOpts flags =
+    if not $ null colourflags
+        then mapOf (head colourflags)
+        else return defaultColourMap
+
+    where 
+        colourflags     = filter isColourMap flags
+        isColourMap arg = case arg of
+            COLOUR_MAPPING _ -> True
+            _                -> False
+        mapOf (COLOUR_MAPPING map) = map
 
 
 main :: IO()

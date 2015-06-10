@@ -1,7 +1,7 @@
 This is a sample of text to be processed.
 
 This is red: #FF0000
-This is a darker red: #EE0000
+This is a darker red: #ee0000
 This is an off-red: #DD1111
 
 This is a blue: #0000FF
@@ -9,3 +9,4 @@ This is a darker blue: #0000FF
 This is an off-blue: #0113E3
 
 This should not be captured: #13p442
+This should be captured: #333
