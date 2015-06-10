@@ -15,11 +15,11 @@ data Colour = Hex String
 scanForColours :: [Colour] -> String -> Handle -> IO[Colour]
 scanForColours knownColours buildColour filehandle = do
     isEnd <- hIsEOF filehandle
-    currentChar <- if (not isEnd)
+    currentChar <- if not isEnd
         then hGetChar filehandle
         else return '\0'
 
-    --putStrLn $ show knownColours ++ " "
+    --print knownColours ++ " "
     --            ++ show buildColour ++ " "
     --            ++ show currentChar
 
@@ -65,12 +65,12 @@ findColours path = do
 matchColoursOnFiles :: Map String String -> [CanonicalFilePath] -> IO()
 matchColoursOnFiles colourMap paths =
     let stringPaths = map canonicalFilePath paths
-        colours_actions :: IO([[Colour]])
-        colours_actions = sequence $ map findColours stringPaths
+        colours_actions :: IO[[Colour]]
+        colours_actions = mapM findColours stringPaths
 
     in do
         colours <- colours_actions
 
-        putStrLn $ show colours
+        print colours
 
 

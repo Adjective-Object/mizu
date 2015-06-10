@@ -114,7 +114,7 @@ colourMapOpt =
          "If it is not a valid JSON string, it will be treated as a"+\
          "file path, and  the apprpriate file will be parsed as json")
     where mapping str = Flag (COLOUR_MAPPING 
-                                (case (decode $ fromChunks $ pack str : []) of
+                                (case decode $ fromChunks $ pack [str] of
                                     Just a -> Right a
                                     Nothing -> Left str))
 
@@ -165,7 +165,7 @@ printHelpText = do
 getColourmapFromOpts :: [FLAG] -> IO(Map String String)
 getColourmapFromOpts flags = 
     if not $ null colourflags
-        then extractMappingWithFallback (colourflags !! 0)
+        then extractMappingWithFallback (head colourflags)
         else return defaultColourMap
 
     where 
@@ -188,15 +188,14 @@ getColourmapFromOpts flags =
             bs <- BSL.readFile path
             
             let fileColourMap = decode bs
-            finalColourMap <- 
-                case fileColourMap of 
-                    Just m  -> return m
-                    Nothing -> do
-                        putStrLn $ 
-                            "failed to parse json in " ++ path 
-                            ++ ", falling back to default" 
-                        return defaultColourMap
-            return finalColourMap
+            
+            case fileColourMap of 
+                Just m  -> return m
+                Nothing -> do
+                    putStrLn $ 
+                        "failed to parse json in " ++ path 
+                        ++ ", falling back to default" 
+                    return defaultColourMap
 
 
 main :: IO()
@@ -207,7 +206,7 @@ main = do
         (\opts -> do
             let (flags, filePaths) = opts
 
-            globs <- sequence $ map glob filePaths
+            globs <- mapM glob filePaths
             let globbedPaths = foldl' (++) [] globs
 
             putStrLn $ "Paths: "            ++ show filePaths
@@ -218,10 +217,10 @@ main = do
                 printHelpText
 
             colourMap <- getColourmapFromOpts flags
-            canonicalPaths <- sequence $ map canonical filePaths
+            canonicalPaths <- mapM canonical filePaths
 
-            putStrLn $ show colourMap
-            putStrLn $ show canonicalPaths
+            print colourMap
+            print canonicalPaths
 
             matchColoursOnFiles colourMap canonicalPaths
         )
