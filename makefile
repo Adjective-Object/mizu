@@ -1,18 +1,22 @@
-all: prism
-.PHONY: clean
+all: mizu
+.PHONY: clean test
 
 TEMPLATE_DIR=images/road.jpg
 OUTPUT_DIR=images/road.jpg
 BUILD_PATH=dist/build
 
-prism: src/*
+mizu: src/*
 	cabal install --only-dependencies
 	cabal configure
 	cabal build
 	cp $(BUILD_PATH)/mizu/mizu ./mizu
+	echo "Build Complete!" && echo ""
 
 lint:
 	hlint src/
+
+test: mizu
+	./mizu test/*.test
 
 clean:
 	rm -f *.o

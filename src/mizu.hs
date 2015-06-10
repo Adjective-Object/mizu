@@ -4,6 +4,7 @@ import System.IO (stdin)
 import System.Exit (exitWith, exitSuccess, ExitCode(..))
 import System.FilePath.Canonical
 import System.Environment (getProgName, getArgs)
+import System.Path.Glob(glob)
 import System.Console.GetOpt (
     getOpt',
     OptDescr(..),
@@ -18,7 +19,9 @@ import Debug.Trace (trace)
 import Data.List.Split(splitOn)
 import Data.Aeson (decode)
 import Data.ByteString.Char8(pack)
-import Data.ByteString.Lazy(fromChunks)
+import Data.ByteString.Lazy as BSL (fromChunks, readFile)
+
+import Colours (matchColoursOnFiles)
 
 -- cast a value to string 
 traceVal x = trace (show x) x
@@ -101,7 +104,7 @@ outdirOpt =
     where mapping str = Flag (OUTPUT_DIRECTORY str)
 
 colourMapOpt =
-    Option "o" ["output-directory"]
+    Option "c" ["colours", "colors"]
         (ReqArg mapping "COLOUR_MAPPING")
         ("a valid JSON string of the mapping between colour names to"+\
          "hex codes. Example:"+\\
@@ -159,6 +162,43 @@ printHelpText = do
     putStrLn $ helpText progName
     exitSuccess
 
+getColourmapFromOpts :: [FLAG] -> IO(Map String String)
+getColourmapFromOpts flags = 
+    if not $ null colourflags
+        then extractMappingWithFallback (colourflags !! 0)
+        else return defaultColourMap
+
+    where 
+        colourflags     = filter isColourMap flags
+        isColourMap arg = case arg of
+            COLOUR_MAPPING _ -> True
+            _                -> False
+
+        extractMappingWithFallback :: FLAG -> IO(Map String String)
+        extractMappingWithFallback (COLOUR_MAPPING arg) = 
+            case arg of 
+                -- map passed unsuccessfully from stdin
+                Left path -> parseFileToColourMap path
+                -- map passed successfully from stdin
+                Right map -> return map 
+
+        parseFileToColourMap :: String -> IO(Map String String)
+        parseFileToColourMap path = do
+            putStrLn "colour map not valid json, loading as file..."
+            bs <- BSL.readFile path
+            
+            let fileColourMap = decode bs
+            finalColourMap <- 
+                case fileColourMap of 
+                    Just m  -> return m
+                    Nothing -> do
+                        putStrLn $ 
+                            "failed to parse json in " ++ path 
+                            ++ ", falling back to default" 
+                        return defaultColourMap
+            return finalColourMap
+
+
 main :: IO()
 main = do
     argv <- getArgs
@@ -167,13 +207,21 @@ main = do
         (\opts -> do
             let (flags, filePaths) = opts
 
+            globs <- sequence $ map glob filePaths
+            let globbedPaths = foldl' (++) [] globs
+
+            putStrLn $ "Paths: "            ++ show filePaths
+            putStrLn $ "Globbed Files: "    ++ show globbedPaths
+
             -- print helptext when no args or --help is one of the args
-            when (HELP `elem` flags || null filePaths)
+            when (HELP `elem` flags || null globbedPaths)
                 printHelpText
 
-            -- colourMap <- getColourmapFromOpts flags
-
+            colourMap <- getColourmapFromOpts flags
             canonicalPaths <- sequence $ map canonical filePaths
 
+            putStrLn $ show colourMap
             putStrLn $ show canonicalPaths
-            )
+
+            matchColoursOnFiles colourMap canonicalPaths
+        )
