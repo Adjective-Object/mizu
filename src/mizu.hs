@@ -23,7 +23,7 @@ import Data.ByteString.Lazy as BSL (fromChunks, readFile)
 
 import ColourScan (matchColoursOnFiles)
 
--- cast a value to string 
+-- cast a value to string
 traceVal x = trace (show x) x
 
 -- split path on image decoding error
@@ -67,15 +67,15 @@ helpText progName =
 optionStrings :: [String]
 optionStrings =
     let flagDescPairs =
-            map 
+            map
                 (\ (Option shorts longs _ desc) ->
-                    let flagNames = map (\c -> ['-',c]) shorts ++ 
+                    let flagNames = map (\c -> ['-',c]) shorts ++
                                     map (\l -> "--" ++ l) longs
-                    in (intercalate ", " flagNames, 
-                        splitOn "\n" desc)) 
+                    in (intercalate ", " flagNames,
+                        splitOn "\n" desc))
                 options
-        maxFlagStringLength = 
-            maximum $ map 
+        maxFlagStringLength =
+            maximum $ map
                 (\ (flagStr, _) -> length flagStr)
                 flagDescPairs
         leftColumnPadding = "\n" ++ replicate (12 + maxFlagStringLength) ' '
@@ -121,7 +121,7 @@ colourMapOpt =
          "file path, and  the apprpriate file will be parsed as json")
     where mapping str = Flag (COLOUR_MAPPING $ loadColour str)
 
-defaultColourMap = fromList 
+defaultColourMap = fromList
     [ ("black", "#000000")
     , ("white", "#FFFFFF")
     , ("green", "#00FF00")
@@ -167,24 +167,24 @@ printHelpText = do
 
 
 loadColour :: String -> IO(Map String String)
-loadColour str = 
+loadColour str =
     case decode $ fromChunks [pack str] of
         Just map -> return map
         Nothing -> loadMapFromFile str
-    where   
+    where
         loadMapFromFile :: FilePath -> IO(Map String String)
         loadMapFromFile path = do
             putStrLn "colour map not valid json, loading as file..."
             bs <- BSL.readFile path
-            
+
             let fileColourMap = decode bs
-            
-            case fileColourMap of 
+
+            case fileColourMap of
                 Just m  -> return m
                 Nothing -> do
-                    putStrLn $ 
-                        "failed to parse json in " ++ path 
-                        ++ ", falling back to default" 
+                    putStrLn $
+                        "failed to parse json in " ++ path
+                        ++ ", falling back to default"
                     return defaultColourMap
 
 getColourmapFromOpts :: [FLAG] -> IO(Map String String)
@@ -193,7 +193,7 @@ getColourmapFromOpts flags =
         then mapOf (head colourflags)
         else return defaultColourMap
 
-    where 
+    where
         colourflags     = filter isColourMap flags
         isColourMap arg = case arg of
             COLOUR_MAPPING _ -> True
@@ -204,8 +204,8 @@ getColourmapFromOpts flags =
 main :: IO()
 main = do
     argv <- getArgs
-    either' (getOpt argv) 
-        exitWithError 
+    either' (getOpt argv)
+        exitWithError
         (\opts -> do
             let (flags, filePaths) = opts
 
