@@ -11,45 +11,47 @@ import System.IO
 import System.FilePath.Canonical (CanonicalFilePath, canonicalFilePath)
 import Control.Monad (when, sequence)
 
-scanForColours :: [HexColour] -> String -> Handle -> IO[HexColour]
-scanForColours knownColours buildColour filehandle = do
+colourFileFold :: String -> (a -> String -> a) -> a -> Handle -> IO(a)
+colourFileFold buildColour foldfn out filehandle = do
     isEnd <- hIsEOF filehandle
     currentChar <- if not isEnd
         then hGetChar filehandle
         else return '\0'
 
     if isEnd
-        then return knownColours
+        then return out
         else let
             currentColour = currentChar : buildColour
             hexColour     = Hex (reverse currentColour)
             prevColour    = Hex (reverse buildColour)
-            (nextKnown, nextColour)
+            (nextOut, nextColour)
                 | currentChar == '#' -- open a new capture on '#''
-                    = (knownColours, [currentChar])
+                    = (out, [currentChar])
 
                 -- store capture if it's 6 digits long
                 | length currentColour == 7 -- close a capture
                     = if isHexDigit currentChar
-                        then (hexColour : knownColours, [])
-                        else (knownColours,             [])
+                        then (foldfn hexColour out, [])
+                        else (out,                  [])
 
                 -- store capture if it's 3 digits long and ended
                 | length buildColour == 4
                     && not (isHexDigit currentChar)
-                    = (prevColour : knownColours, [])
+                    = (foldfn prevColour out, [])
 
                 -- add to capture
                 | 0 < length currentColour
                     && length currentColour < 7
                     && isHexDigit currentChar
-                    = (knownColours, currentColour)
+                    = (out, currentColour)
 
                 -- not in a capture, or capture was broken
                 | otherwise
-                    = (knownColours, [])
+                    = (out, [])
 
-            in scanForColours nextKnown nextColour filehandle
+            in colourFileFold foldfn nextColour out nextColour filehandle
+
+scanForColours = colourFileFold "" (:) []
 
 findColours :: String -> IO[HexColour]
 findColours path = do
