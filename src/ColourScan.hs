@@ -1,14 +1,15 @@
 module ColourScan where
 
 import Colours
+import ColourMatch
 import Data.Char (isHexDigit)
 import Data.List (minimumBy, nub)
-import Data.Map (Map, fromList, toList)
+import Data.Map.Strict (Map, fromList, toList, mapKeys)
+import qualified Data.Map.Strict as Map (map)
 
 import System.IO
 import System.FilePath.Canonical (CanonicalFilePath, canonicalFilePath)
 import Control.Monad (when, sequence)
-
 
 scanForColours :: [HexColour] -> String -> Handle -> IO[HexColour]
 scanForColours knownColours buildColour filehandle = do
@@ -57,36 +58,11 @@ findColours path = do
 
 
 
-data ColourMatch = ColourMatch
-    { matchName         :: String
-    , matchDifference   :: Double -- L channel distance (thisColour - matchColour)
-    , outString         :: String
-    } deriving Show
-
-matchColours :: [(LABColour, String)] -> [LABColour] -> [ColourMatch]
-matchColours labPairs foundColours =
-    let lDiff (LAB l1 _ _) (LAB l2 _ _, name) = ColourMatch
-            { matchName = name
-            , matchDifference = l1 - l2
-            , outString = generateOutString name (l1 - l2) }
-        distances c = map (lDiff c) labPairs
-        closest c = minimumBy
-            (\ a b -> compare
-                (abs $ matchDifference a)
-                (abs $ matchDifference b))
-            $ distances c
-    in map closest foundColours
-
-generateOutString :: String -> Double -> String
-generateOutString colourName lumDiff =
-    "{[ CIELumDiff( " ++ colourName ++ "_Lab, " ++ show lumDiff ++ ") ]}"
-
-
 
 -- create a list of IO actions from a string of files to parse
 -- as well as the colour map to match against
 matchColoursOnFiles :: Map String String -> [CanonicalFilePath] -> IO()
-matchColoursOnFiles colourMap paths =
+matchColoursOnFiles hexTextMap paths =
     let stringPaths = map canonicalFilePath paths
         coloursActions :: IO[[HexColour]]
         coloursActions = mapM findColours stringPaths
@@ -94,19 +70,17 @@ matchColoursOnFiles colourMap paths =
     in do
         -- find the colours in the files
         hexColoursByFile <- coloursActions
-        let hexColours = nub $ concat hexColoursByFile
-        print hexColours
-
-        let labColours :: [LABColour]
+        let hexColours = concat hexColoursByFile
             labColours = map convert hexColours
 
-        -- match them to the colours given in the cmap
-        let reverseLabPairs =
-                map (\ (name, cstr) -> (convert (Hex cstr) :: LABColour, name))
-                    (toList colourMap)
-            colourMatches = matchColours reverseLabPairs labColours
-            matchMap = fromList $ zip hexColours colourMatches
+        print hexColours
+
+        let hexMap =  Map.map Hex hexTextMap
+            labMap =  Map.map convert hexMap :: (Map String LABColour)
+            colourPairs = zip hexColours labColours
+
+        let colourMatches = matchColours labMap colourPairs
 
         -- substitute back into the source file
-        print matchMap
+        print colourMatches
 

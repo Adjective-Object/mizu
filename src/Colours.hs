@@ -3,6 +3,11 @@ import Data.List (foldl', reverse)
 import Data.List.Split (chunksOf)
 import Numeric (readHex, showHex)
 
+
+import Debug.Trace (trace)
+traceVal x = trace (show x) x
+traceName name x = trace (name ++ ":  " ++ show x) x
+
 class ColourConversion a b where
     convert :: a -> b
 
@@ -12,16 +17,20 @@ data HexColour = Hex String
 instance ColourConversion HexColour HexColour where
     convert (Hex str)   = Hex str
 instance ColourConversion RGBColour HexColour where
-    convert (RGB r g b) =
-            Hex $ "#"
-                ++ showHex (round r) ""
-                ++ showHex (round g) ""
+    convert (RGB r g b) = 
+            Hex $ "#" 
+                ++ showHex (round r) "" 
+                ++ showHex (round g) "" 
                 ++ showHex (round b) ""
 instance ColourConversion LABColour HexColour where
     convert (LAB l a b) = convert (convert (LAB l a b) :: RGBColour)
 
 data LABColour = LAB Double Double Double
     deriving Show
+lum     (LAB l _ _) = l
+colourA (LAB _ a _) = a
+colourB (LAB _ _ b) = b
+
 instance ColourConversion HexColour LABColour where
     convert (Hex str)   = convert (convert (Hex str) :: RGBColour)
 instance ColourConversion LABColour LABColour where
@@ -29,11 +38,11 @@ instance ColourConversion LABColour LABColour where
 instance ColourConversion RGBColour LABColour where
     convert (RGB r g b) = convert (convert (RGB r g b) :: XYZColour)
 instance ColourConversion XYZColour LABColour where
-    convert (XYZ x y z) =
+    convert (XYZ x y z) = 
         let xFrac = filt $ x / 95.047
             yFrac = filt $ y / 100
             zFrac = filt $ z / 108.883
-
+            
             filt x = if x > 0.008856
                 then x ** ( 1/3 )
                 else 7.787 * x + ( 16 / 116 )
@@ -42,6 +51,10 @@ instance ColourConversion XYZColour LABColour where
                 (500 * (xFrac - yFrac))
                 (200 * (yFrac - zFrac))
 
+labDistanceAB :: LABColour -> LABColour -> Double
+labDistanceAB (LAB _ a1 b1) (LAB _ a2 b2) = 
+    (a1 - a2) ** 2 + (b1 - b2) ** 2
+
 data RGBColour = RGB Double Double Double
     deriving Show
 instance ColourConversion RGBColour RGBColour where
@@ -49,12 +62,12 @@ instance ColourConversion RGBColour RGBColour where
 instance ColourConversion LABColour RGBColour where
     convert (LAB l a b) = RGB l a b -- TODO
 instance ColourConversion HexColour RGBColour where
-    convert (Hex str)   =
+    convert (Hex str)   = 
         let strData      = drop 1 str
             hexStrings   = chunksOf (length strData `quot` 3) strData
             readers      = map readHex hexStrings
             first (a, _) = a
-            [r, g, b]    = map (\a -> first . head a) readers
+            [r, g, b]    = map (first . head) readers
         in RGB r g b
 
 data XYZColour = XYZ Double Double Double
@@ -62,10 +75,10 @@ data XYZColour = XYZ Double Double Double
 instance ColourConversion XYZColour XYZColour where
     convert (XYZ x y z) = XYZ x y z
 instance ColourConversion RGBColour XYZColour where
-    convert (RGB r g b) =
-        let toXYZChan a =
+    convert (RGB r g b) = 
+        let toXYZChan a = 
                 let frac = a / 255
-                    mid =
+                    mid = 
                         if frac > 0.04045
                             then ((frac + 0.055) / 1.055) ** 2.4
                             else frac / 12.92
@@ -78,7 +91,7 @@ instance ColourConversion RGBColour XYZColour where
                 (vr * 0.2126 + vg * 0.7152 + vb * 0.0722)
                 (vr * 0.0193 + vg * 0.1192 + vb * 0.9505)
 instance ColourConversion LABColour XYZColour where
-    convert (LAB l a b) =
+    convert (LAB l a b) = 
         let y = (l + 16 ) / 116
             x = y + a / 500
             z = y - b / 200
