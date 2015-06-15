@@ -18,6 +18,7 @@ lint:
 
 test: mizu
 	./mizu test/*.test
+	cat test/*.test.out
 
 clean:
 	rm -f *.o

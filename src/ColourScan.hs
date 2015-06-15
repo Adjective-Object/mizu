@@ -4,14 +4,16 @@ import Colours
 import ColourMatch
 import Data.Char (isHexDigit)
 import Data.List (minimumBy, nub)
-import Data.Map.Strict (Map, fromList, toList, mapKeys)
+import Data.Map.Strict (Map, fromList, toList, mapKeys, (!))
 import qualified Data.Map.Strict as Map (map)
 
 import System.IO
 import System.FilePath.Canonical (CanonicalFilePath, canonicalFilePath)
 import Control.Monad (when, sequence)
 
-colourFileFold :: String -> (a -> String -> a) -> a -> Handle -> IO(a)
+import Debug.Trace
+
+colourFileFold :: String -> (Bool -> String -> a -> a) -> a -> Handle -> IO(a)
 colourFileFold buildColour foldfn out filehandle = do
     isEnd <- hIsEOF filehandle
     currentChar <- if not isEnd
@@ -22,8 +24,7 @@ colourFileFold buildColour foldfn out filehandle = do
         then return out
         else let
             currentColour = currentChar : buildColour
-            hexColour     = Hex (reverse currentColour)
-            prevColour    = Hex (reverse buildColour)
+            prevColour    = reverse buildColour
             (nextOut, nextColour)
                 | currentChar == '#' -- open a new capture on '#''
                     = (out, [currentChar])
@@ -31,13 +32,13 @@ colourFileFold buildColour foldfn out filehandle = do
                 -- store capture if it's 6 digits long
                 | length currentColour == 7 -- close a capture
                     = if isHexDigit currentChar
-                        then (foldfn hexColour out, [])
-                        else (out,                  [])
+                        then (foldfn True currentColour out, [])
+                        else (out,                      [])
 
                 -- store capture if it's 3 digits long and ended
                 | length buildColour == 4
                     && not (isHexDigit currentChar)
-                    = (foldfn prevColour out, [])
+                    = (foldfn True prevColour out, [])
 
                 -- add to capture
                 | 0 < length currentColour
@@ -49,16 +50,47 @@ colourFileFold buildColour foldfn out filehandle = do
                 | otherwise
                     = (out, [])
 
-            in colourFileFold foldfn nextColour out nextColour filehandle
+            in colourFileFold nextColour foldfn nextOut filehandle
 
-scanForColours = colourFileFold "" (:) []
+keepIfColour :: Bool -> String -> [HexColour] -> [HexColour]
+keepIfColour isColour a b =
+    if isColour
+        then ((:) . Hex) a b
+        else b
+
+findColoursInFile :: Handle -> IO[HexColour]
+findColoursInFile = colourFileFold "" keepIfColour []
 
 findColours :: String -> IO[HexColour]
 findColours path = do
     fileHandle <- openFile path ReadMode
-    scanForColours [] "" fileHandle
+    findColoursInFile fileHandle
+
+replaceColour :: Map String String
+    -> Handle
+    -> Bool
+    -> String
+    -> [IO()] -> [IO()]
+replaceColour stringMap writeHandle isColour str actions =
+    actions ++ [(hPutStr writeHandle $
+        if isColour then stringMap ! str
+                    else str)]
+
+translateFileTo :: Map String String -> String -> String -> IO[IO()]
+translateFileTo cMap inPath outPath = do
+    readHandle  <- openFile inPath ReadMode
+    writeHandle <- openFile outPath WriteMode
+    writeActions<- colourFileFold "" 
+        (replaceColour cMap writeHandle) [] readHandle
+
+    return $ writeActions ++ [(hClose writeHandle)]
 
 
+
+translateFile :: Map String String -> String -> IO[IO()]
+translateFile cMap path =
+    let outPath = path ++ ".out" -- TODO this
+    in translateFileTo cMap path outPath
 
 
 -- create a list of IO actions from a string of files to parse
@@ -81,8 +113,33 @@ matchColoursOnFiles hexTextMap paths =
             labMap =  Map.map convert hexMap :: (Map String LABColour)
             colourPairs = zip hexColours labColours
 
-        let colourMatches = matchColours labMap colourPairs
+        let
+            colourMatches = matchColours labMap colourPairs
+            stringMap :: Map String String
+            stringMap = Map.map colourMapToOutString
+                $ mapKeys (\ (Hex x) -> x) colourMatches
 
-        -- substitute back into the source file
-        print colourMatches
+        let writeActions :: [IO()]
+            writeActions = map
+                (unpackAndDoSequence . translateFile stringMap)
+                stringPaths
 
+        doSequence writeActions
+
+
+unpackAndDoSequence :: IO[IO a] -> IO()
+unpackAndDoSequence x = do ys <- x
+                           doSequence ys
+
+doSequence :: [IO a] -> IO ()
+doSequence [] = return ()
+doSequence (x:xs) = do x
+                       doSequence xs
+
+colourMapToOutString :: ColourMatch -> String
+colourMapToOutString match =
+        "{[ lab_lumdiff("
+            ++ matchName match
+            ++ ", "
+            ++ (show $ lumDiff match)
+            ++ " ]}"
