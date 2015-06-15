@@ -13,7 +13,7 @@ import Control.Monad (when, sequence)
 
 import Debug.Trace
 
-colourFileFold :: String -> (Bool -> String -> a -> a) -> a -> Handle -> IO(a)
+colourFileFold :: String -> (Bool -> String -> a -> a) -> a -> Handle -> IO a
 colourFileFold buildColour foldfn out filehandle = do
     isEnd <- hIsEOF filehandle
     currentChar <- if not isEnd
@@ -73,10 +73,10 @@ replaceColour :: Map String String
     -> [IO()] -> [IO()]
 replaceColour stringMap writeHandle isColour str actions =
     actions ++
-        [(hPutStr writeHandle $
+        [hPutStr writeHandle $
             if isColour
                 then stringMap ! str
-                else str)]
+                else str]
 
 translateFileTo :: Map String String -> String -> String -> IO[IO()]
 translateFileTo cMap inPath outPath = do
@@ -85,11 +85,11 @@ translateFileTo cMap inPath outPath = do
     writeActions<- colourFileFold "" 
         (replaceColour cMap writeHandle) [] readHandle
 
-    return $ writeActions ++ [(hClose writeHandle)]
+    return $ writeActions ++ [hClose writeHandle]
 
 
 
-translateFile :: Map String String -> String -> IO[IO()]
+translateFile :: Map String String -> StringF -> IO[IO()]
 translateFile cMap path =
     let outPath = path ++ ".out" -- TODO this
     in translateFileTo cMap path outPath
@@ -143,5 +143,5 @@ colourMapToOutString match =
         "{[ lab_lumdiff("
             ++ matchName match
             ++ ", "
-            ++ (show $ lumDiff match)
+            ++ show (lumDiff match)
             ++ " ]}"
