@@ -21,7 +21,7 @@ colourFileFold buildColour foldfn out filehandle = do
         else return '\0'
 
     if isEnd
-        then return out
+        then return (foldfn False (reverse buildColour) out)
         else let
             currentColour = currentChar : buildColour
             prevColour    = reverse buildColour
@@ -38,7 +38,7 @@ colourFileFold buildColour foldfn out filehandle = do
                 -- store capture if it's 3 digits long and ended
                 | length buildColour == 4
                     && not (isHexDigit currentChar)
-                    = (foldfn True prevColour out, [])
+                    = (foldfn True prevColour out, [currentChar])
 
                 -- add to capture
                 | 0 < length currentColour
@@ -48,7 +48,7 @@ colourFileFold buildColour foldfn out filehandle = do
 
                 -- not in a capture, or capture was broken
                 | otherwise
-                    = (out, [])
+                    = (foldfn False (reverse currentColour) out, [])
 
             in colourFileFold nextColour foldfn nextOut filehandle
 
@@ -72,9 +72,11 @@ replaceColour :: Map String String
     -> String
     -> [IO()] -> [IO()]
 replaceColour stringMap writeHandle isColour str actions =
-    actions ++ [(hPutStr writeHandle $
-        if isColour then stringMap ! str
-                    else str)]
+    actions ++
+        [(hPutStr writeHandle $
+            if isColour
+                then stringMap ! str
+                else str)]
 
 translateFileTo :: Map String String -> String -> String -> IO[IO()]
 translateFileTo cMap inPath outPath = do
