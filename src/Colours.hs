@@ -51,9 +51,9 @@ instance ColourConversion XYZColour LABColour where
                 (500 * (xFrac - yFrac))
                 (200 * (yFrac - zFrac))
 
-labDistanceAB :: LABColour -> LABColour -> Double
-labDistanceAB (LAB _ a1 b1) (LAB _ a2 b2) = 
-    (a1 - a2) ** 2 + (b1 - b2) ** 2
+labDistanceABWeighted :: LABColour -> LABColour -> Double
+labDistanceABWeighted (LAB l1 a1 b1) (LAB l2 a2 b2) = 
+    (a1 - a2) ** 2 + (b1 - b2) ** 2 + ((l2 - l1) ** 2) * 0.5
 
 data RGBColour = RGB Double Double Double
     deriving Show

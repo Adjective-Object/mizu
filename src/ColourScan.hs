@@ -2,6 +2,7 @@ module ColourScan where
 
 import Colours
 import ColourMatch
+import qualified Args (MIZU_CONF(..))
 import Data.Char (isHexDigit)
 import Data.List (minimumBy, nub)
 import Data.Map.Strict (Map, fromList, toList, mapKeys, (!))
@@ -32,7 +33,7 @@ colourFileFold buildColour foldfn out filehandle = do
                 -- store capture if it's 6 digits long
                 | length currentColour == 7 -- close a capture
                     = if isHexDigit currentChar
-                        then (foldfn True currentColour out, [])
+                        then (foldfn True (reverse currentColour) out, [])
                         else (out,                      [])
 
                 -- store capture if it's 3 digits long and ended
@@ -41,8 +42,8 @@ colourFileFold buildColour foldfn out filehandle = do
                     = (foldfn True prevColour out, [currentChar])
 
                 -- add to capture
-                | 0 < length currentColour
-                    && length currentColour < 7
+                | 0 < length buildColour
+                    && length buildColour < 7
                     && isHexDigit currentChar
                     = (out, currentColour)
 
@@ -75,33 +76,64 @@ replaceColour stringMap writeHandle isColour str actions =
     actions ++
         [hPutStr writeHandle $
             if isColour
-                then stringMap ! str
+                then (stringMap ! str)
                 else str]
 
 translateFileTo :: Map String String -> String -> String -> IO[IO()]
 translateFileTo cMap inPath outPath = do
     readHandle  <- openFile inPath ReadMode
     writeHandle <- openFile outPath WriteMode
-    writeActions<- colourFileFold "" 
+    writeActions<- colourFileFold ""
         (replaceColour cMap writeHandle) [] readHandle
 
     return $ writeActions ++ [hClose writeHandle]
 
 
 
-translateFile :: Map String String -> StringF -> IO[IO()]
+translateFile :: Map String String -> String -> IO[IO()]
 translateFile cMap path =
-    let outPath = path ++ ".out" -- TODO this
+    let outPath = path ++ ".xgcm" -- TODO this
     in translateFileTo cMap path outPath
+
+
+unpackAndDoSequence :: IO[IO a] -> IO()
+unpackAndDoSequence x = do ys <- x
+                           doSequence ys
+
+doSequence :: [IO a] -> IO ()
+doSequence [] = return ()
+doSequence (x:xs) = do x
+                       doSequence xs
+
+colourMapToOutStringPrecise :: ColourMatch -> String
+colourMapToOutStringPrecise match =
+        "{[ lab_lumdiff("
+            ++ matchName match
+            ++ ", "
+            ++ show (lumDiff match)
+            ++ " ]}"
+
+colourMapToOutStringBlock:: ColourMatch -> String
+colourMapToOutStringBlock match -- = -- trick sublimehaskell into hilighting
+    | lumDiff match >= 0    = "{[ bright_" ++ matchName match ++ " ]}"
+    | otherwise             = "{[ " ++ matchName match ++ " ]}"
+
+
+colourMapToOutStringLiteral :: ColourMatch -> String
+colourMapToOutStringLiteral m = "{[ " ++ matchName m ++ " ]}"
+
+
 
 
 -- create a list of IO actions from a string of files to parse
 -- as well as the colour map to match against
-matchColoursOnFiles :: Map String String -> [CanonicalFilePath] -> IO()
-matchColoursOnFiles hexTextMap paths =
-    let stringPaths = map canonicalFilePath paths
+matchColoursOnFiles :: Args.MIZU_CONF -> IO()
+matchColoursOnFiles conf =
+    let hexTextMap  = Args.colourMap conf
+        paths       = Args.paths conf
+
         coloursActions :: IO[[HexColour]]
-        coloursActions = mapM findColours stringPaths
+        coloursActions = mapM findColours paths
 
     in do
         -- find the colours in the files
@@ -118,30 +150,12 @@ matchColoursOnFiles hexTextMap paths =
         let
             colourMatches = matchColours labMap colourPairs
             stringMap :: Map String String
-            stringMap = Map.map colourMapToOutString
+            stringMap = Map.map colourMapToOutStringBlock
                 $ mapKeys (\ (Hex x) -> x) colourMatches
 
         let writeActions :: [IO()]
             writeActions = map
                 (unpackAndDoSequence . translateFile stringMap)
-                stringPaths
+                paths
 
         doSequence writeActions
-
-
-unpackAndDoSequence :: IO[IO a] -> IO()
-unpackAndDoSequence x = do ys <- x
-                           doSequence ys
-
-doSequence :: [IO a] -> IO ()
-doSequence [] = return ()
-doSequence (x:xs) = do x
-                       doSequence xs
-
-colourMapToOutString :: ColourMatch -> String
-colourMapToOutString match =
-        "{[ lab_lumdiff("
-            ++ matchName match
-            ++ ", "
-            ++ show (lumDiff match)
-            ++ " ]}"

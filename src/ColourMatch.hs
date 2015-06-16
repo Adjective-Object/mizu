@@ -33,7 +33,7 @@ matchToBins templateColours dataColours =
         closestIndex someColour =
             first . minimumBy 
                 (\(_,x) (_,y) -> compare x y)
-                $ zip [0..] (map (labDistanceAB someColour) templateColours)
+                $ zip [0..] (map (labDistanceABWeighted someColour) templateColours)
         dataClosestIndecies :: [Int]
         dataClosestIndecies = map closestIndex dataLABColours
         emptyLists = replicate (length templateColours) []

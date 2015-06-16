@@ -20,6 +20,9 @@ test: mizu
 	./mizu test/*.test
 	cat test/*.test.out
 
+testsvg: mizu
+	./mizu test/fileopen.svg
+
 clean:
 	rm -f *.o
 	rm -f *.hi
