@@ -13,21 +13,24 @@ import System.Console.GetOpt (
     ArgDescr(..),
     ArgOrder(Permute),
     getOpt')
+import ColourMatch(ColourMatch(..))
 
 data MaybeFlag = Error String | Flag FLAG
 
-instance Show (IO a) where
-    show _ = "<ioref>"
-
-instance Eq (IO a) where
+instance Eq FLAG where
+    (==) HELP HELP = True
+    (==) DESTINATION_FIXED DESTINATION_FIXED = True
+    (==) (OUTPUT_MODE _) (OUTPUT_MODE _) = True
+    (==) (OUTPUT_DIRECTORY _) (OUTPUT_DIRECTORY _) = True
+    (==) (COLOUR_MAPPING _) (COLOUR_MAPPING _) = True
     (==) _ _ = False
 
 -- options
 data FLAG = HELP
     | DESTINATION_FIXED
+    | OUTPUT_MODE (Maybe (ColourMatch -> String))
     | OUTPUT_DIRECTORY String
-    | COLOUR_MAPPING  (IO(Map String String))
-    deriving (Eq)
+    | COLOUR_MAPPING (IO(Map String String))
 
 (+\) a b = a ++ "\n" ++ b
 (+\\) a b = a ++ "\n    " ++ b
@@ -98,6 +101,47 @@ colourMapOpt =
          "If it is not a valid JSON string, it will be treated as a"+\
          "file path, and  the apprpriate file will be parsed as json")
     where mapping str = Flag (COLOUR_MAPPING $ loadColour str)
+
+matchMethod =
+    Option "m" ["matchmethod", "method"]
+        (ReqArg mapping "MATCH_FORMAT")
+        ("Method to use when matching colour values."+\\
+            "'literal' / 'l':   Match to colours by provided block"+\\
+            "'block'   / 'b':   Match to colours by block, with bright variants (the default)"+\\
+            "'precise' / 'p':   Match to colours by block, preserving variation"+\\
+            "                   with the median of a block in CIE*Lab Lum"+\\
+            "                   requires xgcm provide the function 'lab_lumdiff(hex, diff)'"+\\
+            "                   where 'hex' is an RGB string of format #xxxxxx or #xxx"+\\
+            "                   and 'diff' is a float of the Lum difference to apply")
+    where mapping str = Flag (OUTPUT_MODE $ 
+            case str of
+                "b"       -> Just colourMapToOutStringBlock
+                "block"   -> Just colourMapToOutStringBlock
+                "x"       -> Just colourMapToOutStringPrecise
+                "exact"   -> Just colourMapToOutStringPrecise
+                "l"       -> Just colourMapToOutStringLiteral
+                "literal" -> Just colourMapToOutStringLiteral
+                _         -> Nothing)
+
+colourMapToOutStringPrecise :: ColourMatch -> String
+colourMapToOutStringPrecise match =
+        "{[ lab_lumdiff("
+            ++ matchName match
+            ++ ", "
+            ++ show (lumDiff match)
+            ++ " ]}"
+
+colourMapToOutStringBlock:: ColourMatch -> String
+colourMapToOutStringBlock match -- = -- trick sublimehaskell into hilighting
+    | lumDiff match >= 0    = "{[ bright_" ++ matchName match ++ " ]}"
+    | otherwise             = "{[ " ++ matchName match ++ " ]}"
+
+
+colourMapToOutStringLiteral :: ColourMatch -> String
+colourMapToOutStringLiteral m = "{[ " ++ matchName m ++ " ]}"
+
+
+
 
 defaultColourMap = fromList
     [ ("black",  "#000000")
@@ -178,9 +222,43 @@ getColourmapFromOpts flags =
             _                -> False
         mapOf (COLOUR_MAPPING map) = map
 
+getOutputDirFromOpts :: [FLAG] -> Maybe String
+getOutputDirFromOpts flags =
+    if not $ null outDirFlags
+        then Just $ sanatizeDir $ dirOf (head outDirFlags)
+        else Nothing
+
+    where
+        outDirFlags  = filter isOutDir flags
+        isOutDir arg = case arg of
+            OUTPUT_DIRECTORY _ -> True
+            _                  -> False
+        dirOf (OUTPUT_DIRECTORY dir) = dir
+        
+        -- ensure the path ends with /
+        sanatizeDir ('/' : "") = "/"
+        sanatizeDir (x : "") = x : "/"
+        sanatizeDir (x : xs) = x : sanatizeDir xs
+
+getTranslatorFromOpts :: [FLAG] -> (ColourMatch -> String)
+getTranslatorFromOpts flags =
+    if not $ null translatorFlags
+        then case head translatorFlags of
+            OUTPUT_MODE (Just x) -> x
+            _                    -> colourMapToOutStringBlock
+        else colourMapToOutStringBlock
+
+    where
+        translatorFlags  = filter isTranslator flags
+        isTranslator arg = case arg of
+            OUTPUT_MODE _ -> True
+            _             -> False
+
+
 data MIZU_CONF = MIZU_CONF
     { colourMap        :: Map String String
     , paths            :: [String]
     , destinationFixed :: Bool
-    , outputDir        :: String }
+    , outputDir        :: Maybe String
+	, translator 	   :: ColourMatch -> String}
 

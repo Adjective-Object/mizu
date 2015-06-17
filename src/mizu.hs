@@ -24,7 +24,6 @@ exitWithError err = do
 -- split path on image decoding error
 either' switch fail succeed = either fail succeed switch
 
-
 main :: IO()
 main = do
     argv <- getArgs
@@ -40,14 +39,19 @@ main = do
             when (HELP `elem` flags || null globbedPaths)
                 printHelpText
 
-            colourMap <- getColourmapFromOpts flags
             canonicalPaths <- mapM canonical filePaths
+
+            colourMap   <- getColourmapFromOpts flags
+            let outputDir = getOutputDirFromOpts flags
+                translator  = getTranslatorFromOpts flags
+            
 
             let mizuconf = MIZU_CONF { 
                   colourMap = colourMap
                 , paths = map canonicalFilePath canonicalPaths
                 , destinationFixed = True
-                , outputDir = "./" }
+                , outputDir = outputDir
+                , translator = translator}
 
             matchColoursOnFiles mizuconf
         )

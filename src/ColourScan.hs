@@ -7,6 +7,7 @@ import Data.Char (isHexDigit)
 import Data.List (minimumBy, nub)
 import Data.Map.Strict (Map, fromList, toList, mapKeys, (!))
 import qualified Data.Map.Strict as Map (map)
+import System.FilePath (takeFileName, replaceFileName)
 
 import System.IO
 import System.FilePath.Canonical (CanonicalFilePath, canonicalFilePath)
@@ -79,21 +80,36 @@ replaceColour stringMap writeHandle isColour str actions =
                 then (stringMap ! str)
                 else str]
 
-translateFileTo :: Map String String -> String -> String -> IO[IO()]
-translateFileTo cMap inPath outPath = do
+translateFileTo :: String -> Map String String -> FilePath -> FilePath -> IO[IO()]
+translateFileTo header cMap inPath outPath = do
     readHandle  <- openFile inPath ReadMode
     writeHandle <- openFile outPath WriteMode
     writeActions<- colourFileFold ""
         (replaceColour cMap writeHandle) [] readHandle
 
+    putStrLn (inPath ++ " -> " ++ outPath)
+    hPutStr writeHandle header
+
     return $ writeActions ++ [hClose writeHandle]
 
 
 
-translateFile :: Map String String -> String -> IO[IO()]
-translateFile cMap path =
-    let outPath = path ++ ".xgcm" -- TODO this
-    in translateFileTo cMap path outPath
+translateFile :: Args.MIZU_CONF -> Map String String -> FilePath -> IO[IO()]
+translateFile conf cMap path = translateFileTo header cMap path outPath
+    where 
+        outPath = case Args.outputDir conf of
+                    Just outDir -> outDir ++ (takeFileName path) ++ ".xgcm"
+                    Nothing     -> path ++ ".xgcm"
+
+        header = if Args.destinationFixed conf
+                    then "{[~ xgcm_output_path(\"" ++ escapeSpaces path ++ "\") ]}"
+                    else ""
+
+        escapeSpaces ('\\' : ' ' : rest) = '\\' : ' '  : escapeSpaces rest
+        escapeSpaces ( x   : ' ' : rest) = x    : '\\' : ' ' : escapeSpaces rest
+        escapeSpaces ( x   : rest)       = x    : escapeSpaces rest
+        escapeSpaces ""                  = ""
+
 
 
 unpackAndDoSequence :: IO[IO a] -> IO()
@@ -105,25 +121,6 @@ doSequence [] = return ()
 doSequence (x:xs) = do x
                        doSequence xs
 
-colourMapToOutStringPrecise :: ColourMatch -> String
-colourMapToOutStringPrecise match =
-        "{[ lab_lumdiff("
-            ++ matchName match
-            ++ ", "
-            ++ show (lumDiff match)
-            ++ " ]}"
-
-colourMapToOutStringBlock:: ColourMatch -> String
-colourMapToOutStringBlock match -- = -- trick sublimehaskell into hilighting
-    | lumDiff match >= 0    = "{[ bright_" ++ matchName match ++ " ]}"
-    | otherwise             = "{[ " ++ matchName match ++ " ]}"
-
-
-colourMapToOutStringLiteral :: ColourMatch -> String
-colourMapToOutStringLiteral m = "{[ " ++ matchName m ++ " ]}"
-
-
-
 
 -- create a list of IO actions from a string of files to parse
 -- as well as the colour map to match against
@@ -131,6 +128,7 @@ matchColoursOnFiles :: Args.MIZU_CONF -> IO()
 matchColoursOnFiles conf =
     let hexTextMap  = Args.colourMap conf
         paths       = Args.paths conf
+        colourTranslator = Args.translator conf
 
         coloursActions :: IO[[HexColour]]
         coloursActions = mapM findColours paths
@@ -141,21 +139,18 @@ matchColoursOnFiles conf =
         let hexColours = concat hexColoursByFile
             labColours = map convert hexColours
 
-        print hexColours
-
         let hexMap =  Map.map Hex hexTextMap
             labMap =  Map.map convert hexMap :: (Map String LABColour)
             colourPairs = zip hexColours labColours
 
-        let
-            colourMatches = matchColours labMap colourPairs
+        let colourMatches = matchColours labMap colourPairs
             stringMap :: Map String String
-            stringMap = Map.map colourMapToOutStringBlock
+            stringMap = Map.map colourTranslator
                 $ mapKeys (\ (Hex x) -> x) colourMatches
 
         let writeActions :: [IO()]
             writeActions = map
-                (unpackAndDoSequence . translateFile stringMap)
+                (unpackAndDoSequence . translateFile conf stringMap)
                 paths
 
         doSequence writeActions
