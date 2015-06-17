@@ -77,7 +77,7 @@ replaceColour stringMap writeHandle isColour str actions =
     actions ++
         [hPutStr writeHandle $
             if isColour
-                then (stringMap ! str)
+                then stringMap ! str
                 else str]
 
 translateFileTo :: String -> Map String String -> FilePath -> FilePath -> IO[IO()]
@@ -98,7 +98,7 @@ translateFile :: Args.MIZU_CONF -> Map String String -> FilePath -> IO[IO()]
 translateFile conf cMap path = translateFileTo header cMap path outPath
     where 
         outPath = case Args.outputDir conf of
-                    Just outDir -> outDir ++ (takeFileName path) ++ ".xgcm"
+                    Just outDir -> outDir ++ takeFileName path ++ ".xgcm"
                     Nothing     -> path ++ ".xgcm"
 
         header = if Args.destinationFixed conf

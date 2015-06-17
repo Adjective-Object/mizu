@@ -72,12 +72,12 @@ optionStrings =
 -- opt definitions
 helpOpt =
     Option "h" ["help"]
-        (NoArg (HELP))
+        (NoArg HELP)
         "display helptext and exit"
 
 destdirOpt =
     Option "d" ["template-destination"]
-        (NoArg (DESTINATION_FIXED))
+        (NoArg DESTINATION_FIXED)
         ("When specified, the generated templates will point to the"+\
         "location of the original files on in the filesystem"+\
         "by absolute path.")
@@ -88,7 +88,7 @@ outdirOpt =
         ("Output directory (place the templates will be placed)."+\
         "If left unspecified, templates will be left next to" +\
         "source files")
-    where mapping str = (OUTPUT_DIRECTORY str)
+    where mapping = OUTPUT_DIRECTORY
 
 colourMapOpt =
     Option "c" ["colours", "colors"]
@@ -100,7 +100,7 @@ colourMapOpt =
              ", \"blue\":  \"#0000FF\" }"+\
          "If it is not a valid JSON string, it will be treated as a"+\
          "file path, and  the apprpriate file will be parsed as json")
-    where mapping str = (COLOUR_MAPPING $ loadColour str)
+    where mapping str = COLOUR_MAPPING $ loadColour str
 
 matchMethod =
     Option "m" ["matchmethod", "method"]
@@ -146,9 +146,6 @@ colourMapToOutStringBlock match -- = -- trick sublimehaskell into hilighting
 
 colourMapToOutStringLiteral :: ColourMatch -> String
 colourMapToOutStringLiteral m = "{[ " ++ matchName m ++ " ]}"
-
-
-
 
 defaultColourMap = fromList
     [ ("black",  "#000000")
@@ -248,10 +245,10 @@ getOutputDirFromOpts flags =
         sanatizeDir (x : "") = x : "/"
         sanatizeDir (x : xs) = x : sanatizeDir xs
 
-getTranslatorFromOpts :: [FLAG] -> (ColourMatch -> String)
+getTranslatorFromOpts :: [FLAG] -> ColourMatch -> String
 getTranslatorFromOpts flags =
     case translatorFlags of
-        (OUTPUT_MODE x) : _ -> x
+        OUTPUT_MODE x : _   -> x
         _                   -> colourMapToOutStringBlock
     where
         translatorFlags  = filter isTranslator flags
