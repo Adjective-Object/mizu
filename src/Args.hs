@@ -15,10 +15,9 @@ import System.Console.GetOpt (
     getOpt')
 import ColourMatch(ColourMatch(..))
 
-data MaybeFlag = Error String | Flag FLAG
-
 instance Eq FLAG where
     (==) HELP HELP = True
+    (==) (FLAG_PARSE_ERROR _) (FLAG_PARSE_ERROR _) = True
     (==) DESTINATION_FIXED DESTINATION_FIXED = True
     (==) (OUTPUT_MODE _) (OUTPUT_MODE _) = True
     (==) (OUTPUT_DIRECTORY _) (OUTPUT_DIRECTORY _) = True
@@ -27,8 +26,9 @@ instance Eq FLAG where
 
 -- options
 data FLAG = HELP
+    | FLAG_PARSE_ERROR String
     | DESTINATION_FIXED
-    | OUTPUT_MODE (Maybe (ColourMatch -> String))
+    | OUTPUT_MODE (ColourMatch -> String)
     | OUTPUT_DIRECTORY String
     | COLOUR_MAPPING (IO(Map String String))
 
@@ -72,12 +72,12 @@ optionStrings =
 -- opt definitions
 helpOpt =
     Option "h" ["help"]
-        (NoArg (Flag HELP))
+        (NoArg (HELP))
         "display helptext and exit"
 
 destdirOpt =
     Option "d" ["template-destination"]
-        (NoArg (Flag DESTINATION_FIXED))
+        (NoArg (DESTINATION_FIXED))
         ("When specified, the generated templates will point to the"+\
         "location of the original files on in the filesystem"+\
         "by absolute path.")
@@ -88,7 +88,7 @@ outdirOpt =
         ("Output directory (place the templates will be placed)."+\
         "If left unspecified, templates will be left next to" +\
         "source files")
-    where mapping str = Flag (OUTPUT_DIRECTORY str)
+    where mapping str = (OUTPUT_DIRECTORY str)
 
 colourMapOpt =
     Option "c" ["colours", "colors"]
@@ -100,28 +100,35 @@ colourMapOpt =
              ", \"blue\":  \"#0000FF\" }"+\
          "If it is not a valid JSON string, it will be treated as a"+\
          "file path, and  the apprpriate file will be parsed as json")
-    where mapping str = Flag (COLOUR_MAPPING $ loadColour str)
+    where mapping str = (COLOUR_MAPPING $ loadColour str)
 
 matchMethod =
     Option "m" ["matchmethod", "method"]
         (ReqArg mapping "MATCH_FORMAT")
         ("Method to use when matching colour values."+\\
             "'literal' / 'l':   Match to colours by provided block"+\\
-            "'block'   / 'b':   Match to colours by block, with bright variants (the default)"+\\
-            "'precise' / 'p':   Match to colours by block, preserving variation"+\\
-            "                   with the median of a block in CIE*Lab Lum"+\\
-            "                   requires xgcm provide the function 'lab_lumdiff(hex, diff)'"+\\
-            "                   where 'hex' is an RGB string of format #xxxxxx or #xxx"+\\
-            "                   and 'diff' is a float of the Lum difference to apply")
-    where mapping str = Flag (OUTPUT_MODE $ 
-            case str of
-                "b"       -> Just colourMapToOutStringBlock
-                "block"   -> Just colourMapToOutStringBlock
-                "x"       -> Just colourMapToOutStringPrecise
-                "exact"   -> Just colourMapToOutStringPrecise
-                "l"       -> Just colourMapToOutStringLiteral
-                "literal" -> Just colourMapToOutStringLiteral
-                _         -> Nothing)
+            "'block'   / 'b':   Match to colours by block, with bright"+\\
+            "                   variants (the default)"+\\
+            "'precise' / 'p':   Match to colours by block, preserving "+\\
+            "                   variation with the median of a block"+\\
+            "                   in CIE*Lab Lum."+\\
+            "                   Requires xgcm provide the function"+\\
+            "                      'lab_lumdiff(hex, diff)'"+\\
+            "                   where 'hex' is an RGB string of format"+\\
+            "                       #xxxxxx or #xxx"+\\
+            "                   and 'diff' is a float of the Lum "+\\
+            "                   difference to apply")
+    where
+        mapping str
+            | str == "b" || str == "block"   =
+                OUTPUT_MODE colourMapToOutStringBlock
+            | str == "x" || str == "exact"   =
+                OUTPUT_MODE colourMapToOutStringPrecise
+            | str == "l" || str == "literal" =
+                OUTPUT_MODE colourMapToOutStringLiteral
+            | otherwise =
+                FLAG_PARSE_ERROR ("invalid argument '" ++ str
+                                    ++ " for option matchmethod")
 
 colourMapToOutStringPrecise :: ColourMatch -> String
 colourMapToOutStringPrecise match =
@@ -129,7 +136,7 @@ colourMapToOutStringPrecise match =
             ++ matchName match
             ++ ", "
             ++ show (lumDiff match)
-            ++ " ]}"
+            ++ ") ]}"
 
 colourMapToOutStringBlock:: ColourMatch -> String
 colourMapToOutStringBlock match -- = -- trick sublimehaskell into hilighting
@@ -156,29 +163,30 @@ defaultColourMap = fromList
     --, ("background", "#EEEEEE")
     ]
 
-options :: [OptDescr MaybeFlag]
+options :: [OptDescr FLAG]
 options =
     [ helpOpt
     , outdirOpt
     , destdirOpt
+    , matchMethod
     , colourMapOpt
     ]
 
 getOpt :: [String] -> Either String ([FLAG], [String])
 getOpt argv =
     let (flags, nonopts, unknownopts, errs) = getOpt' Permute options argv
-        flagErrors = filter
-            (\ f -> case f of
-                Error _ -> True
-                _       -> False) flags
+        isError f  = case f of
+                FLAG_PARSE_ERROR _ -> True
+                _                  -> False
+        flagErrors = filter isError flags
 
     in if not $ null flagErrors -- if flagErrors is empty
-        then let flagErrorMessages = map (\ (Error s) -> s) flagErrors
+        then let flagErrorMessages = map (\ (FLAG_PARSE_ERROR s) -> s) flagErrors
             in Left ("Error in parsing flags:\n\t"
                         ++ intercalate "\n\t" flagErrorMessages)
         else if not $ null errs
             then Left ("Error parsing argv\n" ++ foldl' (++) "" errs)
-            else let realFlags = map (\ (Flag f) -> f) flags
+            else let realFlags = map (\ (f) -> f) flags
                 in Right (realFlags, nonopts)
 
 printHelpText :: IO()
@@ -234,7 +242,7 @@ getOutputDirFromOpts flags =
             OUTPUT_DIRECTORY _ -> True
             _                  -> False
         dirOf (OUTPUT_DIRECTORY dir) = dir
-        
+
         -- ensure the path ends with /
         sanatizeDir ('/' : "") = "/"
         sanatizeDir (x : "") = x : "/"
@@ -242,12 +250,9 @@ getOutputDirFromOpts flags =
 
 getTranslatorFromOpts :: [FLAG] -> (ColourMatch -> String)
 getTranslatorFromOpts flags =
-    if not $ null translatorFlags
-        then case head translatorFlags of
-            OUTPUT_MODE (Just x) -> x
-            _                    -> colourMapToOutStringBlock
-        else colourMapToOutStringBlock
-
+    case translatorFlags of
+        (OUTPUT_MODE x) : _ -> x
+        _                   -> colourMapToOutStringBlock
     where
         translatorFlags  = filter isTranslator flags
         isTranslator arg = case arg of
