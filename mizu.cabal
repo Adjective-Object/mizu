@@ -27,7 +27,7 @@ executable mizu
     canonical-filepath,
     filepath,
     split,
-    aeson == 0.6.1.0,
+    aeson >= 0.6.1.0,
     MissingH >= 1.3.0.1,
     containers >= 0.5.0.0,
     bytestring >= 0.10.0.2,

@@ -20,6 +20,7 @@ safeMedian fallback xs
 
 data ColourMatch = ColourMatch
     { matchName :: String
+    , originalColour :: LABColour
     , lumDiff :: Double
     } deriving Show
 
@@ -57,17 +58,19 @@ matchColours labMap foundColours =
         colourBins = matchToBins colours foundColours
         binMedianLums :: [Double]
         binMedianLums = map (safeMedian 0 . map (lum . second)) colourBins
-        hexVariationsFromMedian :: [[(HexColour, Double)]]
+        hexVariationsFromMedian ::
+            [[(HexColour, (LABColour, Double))]]
         hexVariationsFromMedian = map
             (\ (med, colours) ->
-                map (\ (hex, lab) -> (hex, lum lab - med))
+                map (\ (hex, lab) -> (hex, (lab, lum lab - med)))
                 colours )
             $zip binMedianLums colourBins
 
         makeMatches (name, matchdata) =
-            map (\ (hex, lumdiff) ->
+            map (\ (hex, (l, lumdiff)) ->
                 (hex, ColourMatch
                     { matchName = name
+                    , originalColour = l
                     , lumDiff = lumdiff }))
             matchdata
 

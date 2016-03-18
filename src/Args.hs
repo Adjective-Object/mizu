@@ -14,6 +14,11 @@ import System.Console.GetOpt (
     ArgOrder(Permute),
     getOpt')
 import ColourMatch(ColourMatch(..))
+import Colours(lum)
+
+-- cast a value to string
+import Debug.Trace (trace)
+traceVal x = trace (show x) x
 
 instance Eq FLAG where
     (==) HELP HELP = True
@@ -117,13 +122,17 @@ matchMethod =
             "                   where 'hex' is an RGB string of format"+\\
             "                       #xxxxxx or #xxx"+\\
             "                   and 'diff' is a float of the Lum "+\\
-            "                   difference to apply")
+            "                   difference to apply" +\\
+            "'exact' / 'x':     Match to colours by block, preserving "+\\
+            "                   the absolute Luminance of the found colour")
     where
         mapping str
             | str == "b" || str == "block"   =
                 OUTPUT_MODE colourMapToOutStringBlock
-            | str == "x" || str == "exact"   =
+            | str == "p" || str == "precise"   =
                 OUTPUT_MODE colourMapToOutStringPrecise
+            | str == "x" || str == "exact"   =
+                OUTPUT_MODE colourMapToOutStringExact
             | str == "l" || str == "literal" =
                 OUTPUT_MODE colourMapToOutStringLiteral
             | otherwise =
@@ -137,6 +146,17 @@ colourMapToOutStringPrecise match =
             ++ ", "
             ++ show (lumDiff match)
             ++ ") ]}"
+
+colourMapToOutStringExact :: ColourMatch -> String
+colourMapToOutStringExact match =
+        "{[ lab_lumset("
+            ++ matchName match
+            ++ ", "
+            ++ show l
+            ++ ") ]}"
+        where   l :: Double
+                l = lum ( originalColour match )
+
 
 colourMapToOutStringBlock:: ColourMatch -> String
 colourMapToOutStringBlock match -- = -- trick sublimehaskell into hilighting

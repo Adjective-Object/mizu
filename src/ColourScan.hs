@@ -106,7 +106,7 @@ translateFile conf cMap path = translateFileTo header cMap path outPath
                     else ""
 
         escapeSpaces ('\\' : ' ' : rest) = '\\' : ' '  : escapeSpaces rest
-        escapeSpaces ( x   : ' ' : rest) = x    : '\\' : ' ' : escapeSpaces rest
+        escapeSpaces ( x   : ' ' : rest) = x    : "\\\\ " ++ escapeSpaces rest
         escapeSpaces ( x   : rest)       = x    : escapeSpaces rest
         escapeSpaces ""                  = ""
 

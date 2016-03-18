@@ -17,11 +17,11 @@ lint:
 	hlint src/
 
 test: mizu
-	./mizu test/*.test
-	cat test/*.test.out
+	./mizu test/*.test -m x
+	cat test/*.test.xgcm
 
 testsvg: mizu
-	./mizu test/fileopen.svg
+	./mizu test/fileopen.svg -m x
 
 clean:
 	rm -f *.o
