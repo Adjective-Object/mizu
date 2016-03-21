@@ -282,5 +282,5 @@ data MIZU_CONF = MIZU_CONF
     , paths            :: [String]
     , destinationFixed :: Bool
     , outputDir        :: Maybe String
-	, translator 	   :: ColourMatch -> String}
+    , translator       :: ColourMatch -> String}
 

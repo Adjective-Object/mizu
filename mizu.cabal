@@ -6,6 +6,7 @@ version:             0.1.0.0
 synopsis:            create templates from files by matching them to colours
 -- description:         
 -- license:             
+license:             Apache-2.0
 license-file:        LICENSE
 author:              Maxwell Huang-Hobbs
 maintainer:          mhuan13@gmail.com
